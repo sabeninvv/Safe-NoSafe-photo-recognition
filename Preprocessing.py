@@ -457,7 +457,7 @@ def genFromH5(path, x, y, batch, num_classes, to_categorical=False):
                 # Добавление выбранных индексов от каждого класса в конец списка inxs
                 # и по ключу в словарь used_inxs
                 inxs.extend(rand_inxs)
-                used_inxs[class_] += rand_inxs  ################
+                used_inxs[class_] += list(rand_inxs)  ################
 
             ###############Доработать|||||||||
             if batch != bath_on_class * num_classes:
