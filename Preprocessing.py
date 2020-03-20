@@ -5,6 +5,7 @@ from __future__ import print_function
 import os
 import sys
 import time
+import requests
 from functools import lru_cache as cache
 
 import h5py
@@ -16,6 +17,7 @@ from tensorflow.compat.v2.nn import relu6
 from tensorflow.keras.models import load_model, model_from_json
 from tensorflow.keras import utils
 from sklearn.model_selection import train_test_split
+from tqdm import tqdm
 
 
 def reCreate_model(path_h5, path_json=None):
@@ -96,7 +98,7 @@ def getConfMatrix(model, X_Test, y_true, to_categorical=False, y_pred=None):
     print('======>')
     for row, countInClass in enumerate(num_pics_test):
         confusion_matrix.loc[row] = (confusion_matrix.loc[row] * 100) / countInClass
-        confusion_matrix.loc[row] = np.around(confusion_matrix.loc[row], 3)
+        confusion_matrix.loc[row] = np.around(confusion_matrix.loc[row], 2)
     return confusion_matrix
 
 
@@ -310,7 +312,7 @@ def loadH5(path, rescale=False):
     Загрузка .hdf5 файла
     Создание Train, Valid, Test выборок.
     :param path: путь к файлу
-    :param rescale: нужно ли нормировать до [-1 1]
+    :param rescale: флаг для нормализации [-1 1]
     '''
 
     def helpScale(h5py_File, name):
@@ -490,3 +492,248 @@ def genFromH5(path, x, y, batch, num_classes, to_categorical=False):
 
         yield x_batch, y_batch
 
+
+def genFromRAM(x, y, batch, num_classes, to_categorical=False):
+    '''
+    Генератор. Возвращает сбалансированный батч (x, y)
+    x - нормализуется => x/=128. => x-=1.
+    :param path: Путь до .hdf5 файла
+    :param x: str. Ключ к X_train
+    :param y: str. Ключ к y_train
+    :param batch: Размер батча
+    :param num_classes: Количество классов
+    :param to_categorical: Нужен ли smooth_label
+    '''
+    # Балансировка батча. Целое число (x,y) в кажом классе
+    bath_on_class = batch // num_classes
+    # Создание словаря с использованными индексами лэйблов
+    used_inxs = {key: [] for key in [inx for inx in range(num_classes)]}
+
+    ###############Доработать|||||||||
+    if batch != bath_on_class * num_classes:
+        # Если при batch / num_classes есть остаток от деления
+        # Узнать сколько не хватает
+        add_inxs = batch - bath_on_class * num_classes
+    ###############|||||||||||||||||||
+
+    while True:
+        inxs = []  # Массив с рандомными индексами. Используются при формировании батча
+
+        ###############Доработать|||||||||
+        if batch != bath_on_class * num_classes:
+            rand_i = np.random.randint(x.shape[0], size=(add_inxs))
+        ###############|||||||||||||||||||
+
+        for class_ in range(num_classes):
+            # Фильтрация лэйблов по классам
+            # Если used_inxs не пустой, то избавляемся от использованных индексов
+            if len(used_inxs[class_]) > 0:
+                # Создание маски по одному классу. Общая длинна y-вектора не меняется.
+                mask_class = y == class_ # -> bool
+                # Присуждение False использованным индексам класса
+                mask_class[used_inxs[class_]] = False
+                # Получение индексов, где True
+                mask_class = np.where(mask_class)[0]
+                # Если при следующей итерации все индексы будут использованны,
+                # то обнуляем список.
+                if mask_class.shape[0] - bath_on_class < bath_on_class:
+                    used_inxs[class_] = []
+            else:
+                mask_class = y == class_
+                mask_class = np.where(mask_class)[0]  # => тут индексы по классу[0] numpy
+            # Выбор случайных индексов, в количестве  bath_on_class
+            rand_inxs = np.random.choice(mask_class, bath_on_class)
+            # Добавление выбранных индексов от каждого класса в конец списка inxs
+            # и по ключу в словарь used_inxs
+            inxs.extend(rand_inxs)
+            used_inxs[class_] += list(rand_inxs)  ################
+
+        ###############Доработать|||||||||
+        if batch != bath_on_class * num_classes:
+            # Если при batch / num_classes есть остаток от деления
+            # Узнать сколько не хватает
+            add_inxs = batch - bath_on_class * num_classes
+            # Выбираем рандомные индексы
+            rand_labels = np.random.randint(y.shape[0], size=(add_inxs))
+            # Добавляем рандомные индексы
+            inxs.append(rand_labels)
+        ###############|||||||||||||||||||
+
+        # Перевод в np.array,чтобы сделать .shuffle
+        inxs = np.array(inxs, dtype='int64')
+        np.random.shuffle(inxs)
+        # Собираем и скалируем x_batch
+        x_batch = [x[inx] for inx in inxs]
+        x_batch = np.array(x_batch, dtype=np.float32)
+        x_batch /= 128.
+        x_batch -= 1.
+
+        # Собираем y_bath
+        y_batch = [y[inx] for inx in inxs]
+        y_batch = np.array(y_batch, dtype=np.uint8)
+        if to_categorical:
+            # Если установлен флаг, то перевод в one-hot-encoding и размытие меток
+            y_batch = utils.to_categorical(y_batch, num_classes, dtype=np.uint8)
+            y_batch = new_smooth_label(y_batch)
+        yield x_batch, y_batch
+
+
+def lr_scheduler(epoch):
+    '''
+    Планировщик скорости обучения.
+    Возвращает изменённый LearningRate (lr).
+    Коэфициенты выбраны эперическим путём.
+    [1-23]: lr -3
+    [24-39]: lr -4
+    [40-:]: lr-5
+    :param epoch: номер эпохи
+    :return:
+    '''
+    decay_rate = .7
+    decay_step = 1.5
+    if epoch < 11:
+        epoch_ = epoch + 19
+        lr = pow(decay_rate, np.floor(epoch_ / decay_step))
+        return lr
+    elif epoch < 24:
+        lr = 1e-3
+        return lr
+    elif epoch < 39:
+        lr = pow(decay_rate, np.floor(epoch / decay_step))
+        return lr
+    elif epoch < 40:
+        lr = 1e-4
+        return lr
+    else:
+        lr = 1e-5
+        return lr
+
+
+def one_epoch_confmtrx(epoch, logs):
+    '''
+    X_test, y_test должны быть нормализованны и храниться в RAM.
+    NAME_APP, API_KEY должны быть объявлены.
+    Создаёт матрицу ошибок X_test, y_test.
+    Передаёт POST запрос на сервер IFTTT.
+    :param epoch: номер эпохи
+    :param logs: логи входной эпохи
+    :return:
+    '''
+    mtrx = getConfMatrix(model, X_test, y_test)
+    print(mtrx)
+    conf_values = {i: mtrx.values[i][i] for i in range(mtrx.values.shape[-1]-1)}
+
+    acc = logs.get('acc') * 100
+    acc = np.around(acc, 2)
+    val_acc = logs.get('val_acc') * 100
+    val_acc = np.around(val_acc, 2)
+    merge_acc = f'Acc: {acc}. Val_acc: {val_acc}'
+
+    inf = {'value1': epoch, 'value2': merge_acc, 'value3': conf_values}
+    ifttt_url = f'https://maker.ifttt.com/trigger/{NAME_APP}/with/key/{API_KEY}'
+    requests.post(ifttt_url, json = inf)
+
+
+def createImgLinks(main_dir, need_global_path=True):
+    '''
+    Создание pandas dataframe c данными и ссылками на файлы.
+    Столбцы:
+    - NAME. Имя файла.
+    - LABEL. Метка класса по каталогу (1 каталог - 1 класс)
+    - PATH. Абсолютный путь к файлу.
+    :param main_dir: абсолютный путь к дирректории с изображениями, сортированными по каталогам (1 каталог - 1 класс)
+    :param need_global_path: создание абсолютного пути к файлу. Пример: main_dir\your_class_dir\your_image.jpg
+    :return:
+    '''
+    db = pd.DataFrame(columns=['LABEL', 'NAME'])
+    imgs = []
+    labels = []
+    for dir_ in os.listdir(main_dir):
+        child_dir = os.path.join(main_dir, dir_)
+        imgs.extend([img for img in os.listdir(child_dir)])
+        labels.extend([int(dir_) for i in os.listdir(child_dir)])
+    db['NAME'] = imgs
+    db['LABEL'] = labels
+    db['LABEL'] = db['LABEL'].astype('uint8')
+    if need_global_path:
+        db['PATH'] = db.apply(lambda row: os.path.join(main_dir, os.path.join(str(row['LABEL']), row['NAME'])), axis=1)
+    return db
+
+
+def Db2TrainValidTest(db, trainValidSize=0.2, trainTestSize=0.05, shuffle=True, random_state=None):
+    '''
+    Перемешивание данных и создание train, valid, test dataframes с использованием библиотеки sklearn
+    :param db: pandas dataframe c данными и ссылками на файлы
+    :param trainValidSize: размер val выборки (от 0. до 1.)
+    :param trainTestSize: размер test выборки (от 0. до 1.)
+    :param shuffle: перемешивать данные
+    :param random_state: фиксировать случайные значения
+    :return:
+    '''
+    train_db, valid_db = train_test_split(db, test_size=trainValidSize,
+                                          shuffle=shuffle, random_state=random_state)
+    train_db, test_db = train_test_split(train_db, test_size=trainTestSize,
+                                         shuffle=shuffle, random_state=random_state)
+    all_ = []
+    train_counts = train_db.groupby('LABEL').count().values
+    all_.append(train_counts[:, 0])
+
+    val_counts = valid_db.groupby('LABEL').count().values
+    all_.append(val_counts[:, 0])
+
+    test_counts = test_db.groupby('LABEL').count().values
+    all_.append(test_counts[:, 0])
+    _ = [print(i) for i in all_]
+    return train_db, valid_db, test_db
+
+
+def createZeros(train_db, valid_db, test_db, dim=(128, 128, 3)):
+    '''
+    Резервирование помяти под массивы данных (np.uint8) train, valid, test.
+    (на основе train, valid, test dataframes)
+    np.uint8 - значения 0 - 255.
+    :param train_db: pandas dataframe c ссылками на train выборку
+    :param valid_db: pandas dataframe c ссылками на valid выборку
+    :param test_db: pandas dataframe c ссылками на test выборку
+    :param dim: размерность данных
+    :return:
+    '''
+    h, w, c = dim
+
+    X_train = np.zeros((train_db.shape[0], h, w, c), dtype=np.uint8)
+    y_train = np.zeros((train_db.shape[0]), dtype=np.uint8)
+
+    X_val = np.zeros((valid_db.shape[0], h, w, c), dtype=np.uint8)
+    y_val = np.zeros((valid_db.shape[0]), dtype=np.uint8)
+
+    X_test = np.zeros((test_db.shape[0], h, w, c), dtype=np.uint8)
+    y_test = np.zeros((test_db.shape[0]), dtype=np.uint8)
+
+    print(f'{round(sys.getsizeof(X_train) * 1e-6, 2)} Mb')
+    print(f'{round(sys.getsizeof(y_train) * 1e-6, 2)} Mb')
+    print(f'{round(sys.getsizeof(X_val) * 1e-6, 2)} Mb')
+    print(f'{round(sys.getsizeof(y_val) * 1e-6, 2)} Mb')
+    print(f'{round(sys.getsizeof(X_test) * 1e-6, 2)} Mb')
+    print(f'{round(sys.getsizeof(y_test) * 1e-6, 2)} Mb')
+    return X_train, X_val, X_test, y_train, y_val, y_test
+
+
+def fillZeros(X, y, link_db):
+    '''
+    Наполнение пустых train, valid, test массивов данных
+    :param X: пустой массив данных под образцы
+    :param y: пустой массив данных под метки
+    :param link_db: pandas dataframe c ссылками
+    :return:
+    '''
+    index = 0
+    for (class_, _, path2img) in tqdm(link_db.values):
+        try:
+            arr = Image.open(path2img, 'r')
+            arr = np.array(arr, dtype=np.uint8)
+            X[index] = arr
+            y[index] = class_
+            index += 1
+        except:
+            continue
+    return X[:index], y[:index]
