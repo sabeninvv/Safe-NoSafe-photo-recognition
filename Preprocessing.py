@@ -71,11 +71,11 @@ def crop2img2arr(path, in_shape=(128, 128), crop=False, center=False, scale=True
 def getConfMatrix(model, X_Test, y_true, to_categorical=False, y_pred=None):
     '''
     Создание матрицы ошибок (в %)
-    :param model: обученная tf.keras модель
-    :param X_Test: data to predict
-    :param y_true: true labels
-    :param y_pred: predict labels
-    :param to_categorical: если labels в one hot encoding
+    :param model: tensorflow.python.keras.engine.training.Model. обученная tf.keras модель
+    :param X_Test: numpy.array(dtype=numpy.float32). data to predict
+    :param y_true: numpy.array(dtype=numpy.uint8) or list. true labels
+    :param y_pred: numpy.array(dtype=numpy.uint8) or list. predict labels
+    :param to_categorical: bool. если labels в one hot encoding
     '''
     if to_categorical:
         num_pics_test = np.unique(y_true, return_counts=True, axis=-2)[1]
@@ -106,9 +106,9 @@ def collaps_fich_matrix(path, model_for_vis, in_shape=(128, 128)):
     '''
     Отражение матрицы признаков каждого выгодного слоя свёрточной сети.
     Схлапывание всех слоёв в 1.
-    :param path: Путь к файлу изображения
-    :param model_for_vis: 'Обрезанная где-то' сеть
-    :param in_shape: Необходимая размерность
+    :param path: string. Путь к файлу изображения
+    :param model_for_vis: tensorflow.python.keras.engine.training.Model. 'Обрезанная где-то' сеть
+    :param in_shape: tuple. Необходимая размерность
     '''
     arr = crop2img2arr(path, in_shape=in_shape)
     img2pred = np.expand_dims(arr, axis=0)
@@ -154,11 +154,11 @@ def compare_images(model_for_vis, path, t):
 def compare_images2(model_for_vis1, model_for_vis2, path, t, in_shape=(128, 128)):
     '''
     Визуализация матрицы признаков свёрточной сети
-    :param model_for_vis1: 'Обрезанная где-то в середине архитектуры' сеть
-    :param model_for_vis2: 'Обрезанная к концу архитектуры' сеть
-    :param path: Путь к файлу изображения
-    :param t: Текст
-    :param in_shape: Необходимая размерность
+    :param model_for_vis1: tensorflow.python.keras.engine.training.Model. 'Обрезанная где-то в середине архитектуры' сеть
+    :param model_for_vis2: tensorflow.python.keras.engine.training.Model. 'Обрезанная к концу архитектуры' сеть
+    :param path: string. Путь к файлу изображения
+    :param t: string. Текст
+    :param in_shape: tuple. Необходимая размерность
     '''
     plt.figure(figsize=(21, 6))
 
@@ -185,8 +185,8 @@ def new_smooth_label(categorical_labels, smooth_factor=0.2):
     '''
     Функция "распыляет" метки,
     переданные в формате onehotencoding
-    :param categorical_labels: метки в формате onehotencoding
-    :param smooth_factor: процент "размытия"
+    :param categorical_labels: np.array(dtype=numpy.uint8) либо list. метки в формате onehotencoding
+    :param smooth_factor: float. процент "размытия"
     '''
     new_y = []
     for y_ in categorical_labels:
@@ -200,10 +200,10 @@ def new_smooth_label(categorical_labels, smooth_factor=0.2):
 def imgs2array(main_dir, width=128, height=128, channels=3):
     '''
     Перевод изображений в numpy.array
-    :param main_dir: каталог с подкаталогами(они же классы) изображений
-    :param width: нужная ширина
-    :param height: нужная высота
-    :param channels: каналы
+    :param main_dir: string. каталог с подкаталогами(они же классы) изображений
+    :param width: integer. нужная ширина
+    :param height: integer. нужная высота
+    :param channels: integer. каналы
     '''
     nums = 0
     for class_ in os.listdir(main_dir):
@@ -241,8 +241,10 @@ def getTrainValidTest(X_train, y_train, trainValid=0.2, trainTest=0.05, shuffle=
     '''
     Раскусывание Train.
     Создание Train, Valid, Test выборок
-    :param trainValid: проценты раскусывания на Valid
-    :param trainTestЖ проценты раскусывания на Test
+    :param X_train: numpy.array(dtype=numpy.float32). Данные
+    :param y_train: numpy.array(dtype=numpy.uint8) or list. Метки.
+    :param trainValid: float. проценты раскусывания на Valid
+    :param trainTest: float. проценты раскусывания на Test
     '''
     X_train, X_val, y_train, y_val = train_test_split(X_train,
                                                       y_train,
@@ -260,11 +262,11 @@ def saveH5(path, X_train, y_train, compress=None, compress_opts=None):
     Раскусывание Train.
     Создание Train, Valid, Test выборок.
     Запись в .hdf5 файл
-    :param path: путь к файлу
-    :param X_train: Данные
-    :param y_train: Метки
-    :param compress: метод сжатия
-    :param compress_opts: степень сжатия
+    :param path: string. путь к файлу
+    :param X_train: numpy.array(dtype=numpy.float32). Данные
+    :param y_train:  numpy.array(dtype=numpy.uint8) or list. Метки
+    :param compress: string. метод сжатия
+    :param compress_opts: integer. степень сжатия
     '''
     X_train, X_val, X_test, y_train, y_val, y_test = getTrainValidTest(y_train,
                                                                        X_train)
@@ -311,8 +313,8 @@ def loadH5(path, rescale=False):
     '''
     Загрузка .hdf5 файла
     Создание Train, Valid, Test выборок.
-    :param path: путь к файлу
-    :param rescale: флаг для нормализации [-1 1]
+    :param path: string. путь к файлу
+    :param rescale: bool. флаг для нормализации [-1 1]
     '''
 
     def helpScale(h5py_File, name):
@@ -341,11 +343,11 @@ def gen2pred(model, path, x, y, batch=1000):
     Генератор. Проходит по файлу, нормализует батч х,
     предсказывает через модель.
     Выдаёт предсказанные y и истинные y.
-    :param model: Модель в Keras
-    :param path: Путь к .hdf5 файлу
-    :param x: str. Ключ к X_train
-    :param y: str. Ключ к y_train
-    :param batch: Размер батча
+    :param model: tensorflow.python.keras.engine.training.Model. Модель в Keras
+    :param path: string. Путь к .hdf5 файлу
+    :param x: string. Ключ в .h5py к X_train
+    :param y: string. Ключ в .h5py к y_train
+    :param batch: integer. Размер батча
     '''
     inx = 0 # Индекс для контроля перемещения по .hdf5
     y_pred_all = [] # Список с распознанными метками классов
@@ -383,11 +385,11 @@ def gen2pred(model, path, x, y, batch=1000):
 def getConfUseGen(model, path, x, y, batch=1000):
     '''
     Создёт матрицу ошибок, используя генератор.
-    :param model: Модель в Keras
-    :param path: Путь к .hdf5 файлу
-    :param x: str. Ключ к X_train
-    :param y: str. Ключ к y_train
-    :param batch: Размер батча
+    :param model: tensorflow.python.keras.engine.training.Model. Модель в Keras
+    :param path: string. Путь к .hdf5 файлу
+    :param x: string. Ключ в .h5py к X_train
+    :param y: string. Ключ в .h5py к y_train
+    :param batch: integer. Размер батча
     '''
     y_pred, y_true = (0., 0.)
     gen = gen2pred(model, path, x, y, batch=batch)
@@ -408,12 +410,12 @@ def genFromH5(path, x, y, batch, num_classes, to_categorical=False):
     '''
     Генератор. Возвращает сбалансированный батч (x, y)
     x - нормализуется. x/=128. ; x-=1.
-    :param path: Путь до .hdf5 файла
-    :param x: str. Ключ к X_train
-    :param y: str. Ключ к y_train
-    :param batch: Размер батча
-    :param num_classes: Количество классов
-    :param to_categorical: Нужен ли smooth_label
+    :param path: string. Путь до .hdf5 файла
+    :param x: string. Ключ в .h5py к X_train
+    :param y: string. Ключ в .h5py к y_train
+    :param batch: integer. Размер батча
+    :param num_classes: integer. Количество классов
+    :param to_categorical: bool. Нужен ли smooth_label
     '''
     # Балансировка батча. Целое число (x,y) в кажом классе
     bath_on_class = batch // num_classes
@@ -496,13 +498,12 @@ def genFromH5(path, x, y, batch, num_classes, to_categorical=False):
 def genFromRAM(x, y, batch, num_classes, to_categorical=False):
     '''
     Генератор. Возвращает сбалансированный батч (x, y)
-    x - нормализуется => x/=128. => x-=1.
-    :param path: Путь до .hdf5 файла
-    :param x: str. Ключ к X_train
-    :param y: str. Ключ к y_train
-    :param batch: Размер батча
-    :param num_classes: Количество классов
-    :param to_categorical: Нужен ли smooth_label
+    x - нормализуется. x/=128. ; x-=1.
+    :param x: string. Ключ в .h5py к X_train
+    :param y: string. Ключ в .h5py к y_train
+    :param batch: integer. Размер батча
+    :param num_classes: integer. Количество классов
+    :param to_categorical: bool. Нужен ли smooth_label
     '''
     # Балансировка батча. Целое число (x,y) в кажом классе
     bath_on_class = batch // num_classes
@@ -586,26 +587,52 @@ def lr_scheduler(epoch):
     [1-23]: lr -3
     [24-39]: lr -4
     [40-:]: lr-5
-    :param epoch: номер эпохи
-    :return:
+    :param epoch: integer. номер эпохи
+    :return: numpy.float32
     '''
     decay_rate = .7
     decay_step = 1.5
     if epoch < 11:
-        epoch_ = epoch + 19
+        epoch_ = epoch + 20
         lr = pow(decay_rate, np.floor(epoch_ / decay_step))
         return lr
-    elif epoch < 24:
+    elif epoch < 16:
         lr = 1e-3
         return lr
-    elif epoch < 39:
-        lr = pow(decay_rate, np.floor(epoch / decay_step))
+    elif epoch < 25:
+        epoch_ = epoch + 15
+        lr = pow(decay_rate, np.floor(epoch_ / decay_step))
         return lr
-    elif epoch < 40:
+    elif epoch < 31:
         lr = 1e-4
         return lr
     else:
         lr = 1e-5
+        return lr
+
+
+def simple_lr_scheduler(epoch):
+    '''
+    Планировщик скорости обучения.
+    Возвращает изменённый LearningRate (lr).
+    Коэфициенты выбраны эперическим путём.
+    [1-23]: lr -3
+    [24-39]: lr -4
+    [40-:]: lr-5
+    :param epoch: integer. номер эпохи
+    :return: numpy.float32
+    '''
+    decay_rate = .7
+    decay_step = 1.5
+    if epoch < 20:
+        epoch_ = epoch + 20
+        lr = 1e-3
+        return lr
+    # elif epoch < 40:
+    #     lr = 1e-4
+    #     return lr
+    else:
+        lr = 1e-4
         return lr
 
 
@@ -615,10 +642,11 @@ def one_epoch_confmtrx(epoch, logs):
     NAME_APP, API_KEY должны быть объявлены.
     Создаёт матрицу ошибок X_test, y_test.
     Передаёт POST запрос на сервер IFTTT.
-    :param epoch: номер эпохи
-    :param logs: логи входной эпохи
-    :return:
+    :param epoch: integer. номер эпохи
+    :param logs: dict. логи входной эпохи
     '''
+    # if (epoch+1) % 10 == 0:
+    #     clear_output()
     mtrx = getConfMatrix(model, X_test, y_test)
     print(mtrx)
     conf_values = {i: mtrx.values[i][i] for i in range(mtrx.values.shape[-1]-1)}
@@ -627,9 +655,9 @@ def one_epoch_confmtrx(epoch, logs):
     acc = np.around(acc, 2)
     val_acc = logs.get('val_acc') * 100
     val_acc = np.around(val_acc, 2)
-    merge_acc = f'Acc: {acc}. Val_acc: {val_acc}'
+    merge_acc = f'{acc}/{val_acc}'
 
-    inf = {'value1': epoch, 'value2': merge_acc, 'value3': conf_values}
+    inf = {'value1': epoch+1, 'value2': merge_acc, 'value3': conf_values}
     ifttt_url = f'https://maker.ifttt.com/trigger/{NAME_APP}/with/key/{API_KEY}'
     requests.post(ifttt_url, json = inf)
 
@@ -641,9 +669,9 @@ def createImgLinks(main_dir, need_global_path=True):
     - NAME. Имя файла.
     - LABEL. Метка класса по каталогу (1 каталог - 1 класс)
     - PATH. Абсолютный путь к файлу.
-    :param main_dir: абсолютный путь к дирректории с изображениями, сортированными по каталогам (1 каталог - 1 класс)
-    :param need_global_path: создание абсолютного пути к файлу. Пример: main_dir\your_class_dir\your_image.jpg
-    :return:
+    :param main_dir: string. абсолютный путь к дирректории с изображениями, сортированными по каталогам (1 каталог - 1 класс)
+    :param need_global_path: bool. создание абсолютного пути к файлу. Пример: main_dir\your_class_dir\your_image.jpg
+    :return: pandas.DataFrame
     '''
     db = pd.DataFrame(columns=['LABEL', 'NAME'])
     imgs = []
@@ -663,12 +691,12 @@ def createImgLinks(main_dir, need_global_path=True):
 def Db2TrainValidTest(db, trainValidSize=0.2, trainTestSize=0.05, shuffle=True, random_state=None):
     '''
     Перемешивание данных и создание train, valid, test dataframes с использованием библиотеки sklearn
-    :param db: pandas dataframe c данными и ссылками на файлы
-    :param trainValidSize: размер val выборки (от 0. до 1.)
-    :param trainTestSize: размер test выборки (от 0. до 1.)
-    :param shuffle: перемешивать данные
-    :param random_state: фиксировать случайные значения
-    :return:
+    :param db: pandas.DataFrame. dataframe c данными и ссылками на файлы
+    :param trainValidSize: float. размер val выборки (от 0. до 1.)
+    :param trainTestSize: float. размер test выборки (от 0. до 1.)
+    :param shuffle: bool. перемешивать данные
+    :param random_state: integer. фиксировать случайные значения
+    :return: pandas.DataFrame
     '''
     train_db, valid_db = train_test_split(db, test_size=trainValidSize,
                                           shuffle=shuffle, random_state=random_state)
@@ -692,11 +720,11 @@ def createZeros(train_db, valid_db, test_db, dim=(128, 128, 3)):
     Резервирование помяти под массивы данных (np.uint8) train, valid, test.
     (на основе train, valid, test dataframes)
     np.uint8 - значения 0 - 255.
-    :param train_db: pandas dataframe c ссылками на train выборку
-    :param valid_db: pandas dataframe c ссылками на valid выборку
-    :param test_db: pandas dataframe c ссылками на test выборку
-    :param dim: размерность данных
-    :return:
+    :param train_db: pandas.DataFrame. pandas dataframe c ссылками на train выборку
+    :param valid_db: pandas.DataFrame. pandas dataframe c ссылками на valid выборку
+    :param test_db: pandas.DataFrame. pandas dataframe c ссылками на test выборку
+    :param dim: tuple. размерность данных
+    :return: numpy.zeros(dtype=numpy.uint8)
     '''
     h, w, c = dim
 
@@ -709,22 +737,22 @@ def createZeros(train_db, valid_db, test_db, dim=(128, 128, 3)):
     X_test = np.zeros((test_db.shape[0], h, w, c), dtype=np.uint8)
     y_test = np.zeros((test_db.shape[0]), dtype=np.uint8)
 
-    print(f'{round(sys.getsizeof(X_train) * 1e-6, 2)} Mb')
-    print(f'{round(sys.getsizeof(y_train) * 1e-6, 2)} Mb')
-    print(f'{round(sys.getsizeof(X_val) * 1e-6, 2)} Mb')
-    print(f'{round(sys.getsizeof(y_val) * 1e-6, 2)} Mb')
-    print(f'{round(sys.getsizeof(X_test) * 1e-6, 2)} Mb')
-    print(f'{round(sys.getsizeof(y_test) * 1e-6, 2)} Mb')
+    print(f'X_train: {round(sys.getsizeof(X_train) * 1e-6, 2)} Mb')
+    print(f'y_train: {round(sys.getsizeof(y_train) * 1e-6, 2)} Mb')
+    print(f'X_val:   {round(sys.getsizeof(X_val) * 1e-6, 2)} Mb')
+    print(f'y_val:   {round(sys.getsizeof(y_val) * 1e-6, 2)} Mb')
+    print(f'X_test:  {round(sys.getsizeof(X_test) * 1e-6, 2)} Mb')
+    print(f'y_test:  {round(sys.getsizeof(y_test) * 1e-6, 2)} Mb')
     return X_train, X_val, X_test, y_train, y_val, y_test
 
 
 def fillZeros(X, y, link_db):
     '''
     Наполнение пустых train, valid, test массивов данных
-    :param X: пустой массив данных под образцы
-    :param y: пустой массив данных под метки
-    :param link_db: pandas dataframe c ссылками
-    :return:
+    :param X: numpy.array(dtype=numpy.uint8). пустой массив данных под образцы
+    :param y: numpy.array(dtype=numpy.uint8). пустой массив данных под метки
+    :param link_db: pandas.DataFrame. pandas dataframe c ссылками
+    :return: numpy.array(dtype=numpy.uint8), numpy.array(dtype=numpy.uint8)
     '''
     index = 0
     for (class_, _, path2img) in tqdm(link_db.values):
