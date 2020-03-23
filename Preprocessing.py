@@ -40,11 +40,11 @@ def reCreate_model(path_h5, path_json=None):
 def crop2img2arr(path, in_shape=(128, 128), crop=False, center=False, scale=True):
     '''
     Перевод изображения в numpy.array
-    :param path: путь к изображению
-    :param in_shape: размер на выходе
-    :param crop: добавление пустой области к меньшему размеру, чтобы получить квадрат
-    :param center: нормализация центрорование
-    :param scale:нормализация -1 +1
+    :param path: string. путь к изображению
+    :param in_shape: tuple. размер на выходе
+    :param crop: bool. добавление пустой области к меньшему размеру, чтобы получить квадрат
+    :param center: bool. нормализация центрорование
+    :param scale: bool. нормализация -1 +1
     '''
     img = Image.open(path, 'r')
     if crop:
