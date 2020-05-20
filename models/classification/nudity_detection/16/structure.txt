@@ -1,0 +1,10 @@
+2020_5_7_1588842971
+ 
+InceptionResNet.
+Dense 1280
+Dense 1024
+Dense 512 ---> 6
+Nadam.
+BS 36.
+DB 21.04.2020_224.
+224x224

@@ -1,0 +1,9 @@
+2020_4_2_1585800047
+ 
+дообучение, использование class_weights
+Nadam-3, -4 (+class_weights)
+ещё 20 эпох на Adam -4 + class_weights
+createModel_15_nadam_Up_linear.
+прямая архитектура
+32-264
+Nadam

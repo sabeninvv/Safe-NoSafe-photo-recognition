@@ -1,0 +1,6 @@
+2020_4_2_1585814044
+ 
+createModel_18_nadam_Up_linear.
+ансамбль
+64-512
+Nadam

@@ -1,0 +1,7 @@
+2020_4_1_1585773718
+ 
+дообучение, использование class_weights
+createModel_15_nadam_Up_linear.
+прямая архитектура
+32-264
+Nadam

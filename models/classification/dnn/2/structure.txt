@@ -1,0 +1,8 @@
+2020_3_31_1585666952
+ 
+Deep dnn = 1,2,3,5,2.
+Res block только на strides(1,1). 
+Linear. 
+Nadam.
+3x3, 5x5. 
+BS 120.

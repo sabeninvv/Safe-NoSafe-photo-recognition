@@ -1,0 +1,9 @@
+h5py
+numpy
+pandas
+pillow
+opencv-python
+tqdm
+matplotlib
+tensorflow==1.15; python_version <= '3.7.4'
+scikit-learn

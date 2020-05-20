@@ -1,0 +1,10 @@
+2020_4_13_1586776651
+ 
+GoogleNet.
+Max pooling сразу. Сжатие до 4x4 в топе.
+loss_weights 1, 0.3, 0.3.
+RMSprop.
+BS 120.
+DB 27.03.2020_128x128.
+GenFromRam.
+13.04 try.

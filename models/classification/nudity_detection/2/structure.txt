@@ -1,0 +1,10 @@
+2020_4_8_1586328836
+ 
+MobileNetV2.
+Dense_2048.
+Dense_1024.
+Nadam.
+BS 120.
+DB 03.04.2020_224x224.
+GenFromH5.
+Third try.

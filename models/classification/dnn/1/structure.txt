@@ -1,0 +1,8 @@
+2020_3_30_1585581989
+ 
+Deeper dnn. 
+Res block только на strides(1,1). 
+Linear. 
+Nadam.
+3x3, 5x5. 
+BS 90.

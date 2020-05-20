@@ -1,0 +1,10 @@
+2020_5_4_1588594822
+ 
+InceptionResNet.
+Dense 1025
+Dense 512 ---> 6
+RMSprop.
+BS 120.
+DB 21.04.2020_224.
+224x224 OOM
+128x128 - fit
