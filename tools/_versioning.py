@@ -74,12 +74,14 @@ def easy_start(path_to_model_version_dirs, model, txt_notification='-'):
 def easy_finish(path_to_database, dim, model, epoch, lr,
                 batch_size, path_pb, augmentation,
                 path_to_test_imgs='', path_to_test_vds='', class_weights=None,
-                batch_predict=100, frames_count=3,
-                prefix_pred_imgs='FOTO', prefix_pred_vds='VIDEO', **kwargs):
+                batch_predict=50, frames_count=3, limit=0.7,
+                prefix_pred_imgs='FOTO', prefix_pred_vds='VIDEO', git_lfs=True,
+                **kwargs):
     '''
     Создание матриц ошибок по видео/фото контенту.
     Создание .yaml файла с описанием.
-    :param frames_count:
+    :param git_lfs: bool. Dump files with git lfs
+    :param frames_count: Количество захватываемых кадров
     :param path_to_test_imgs: string. Абсолютный путь к директории для с изображениями, разбитыми по классам.
     :param path_to_test_vds: string. Абсолютный путь к директории для с видео, разбитыми по классам.
     :param path_to_database: string. Абсолютный путь к базе данных изображений, разбитых по классам.
@@ -106,11 +108,12 @@ def easy_finish(path_to_database, dim, model, epoch, lr,
     if path_to_test_vds:
         gen = _analytics.Pred2vds(path_to_dir=path_to_test_vds, dim=dim, batch=batch_predict,
                                   model=model, only_key_frames=False, frames_count=frames_count,
-                                  filename=path_to_confmtrx, prefix=prefix_pred_vds)
+                                  filename=path_to_confmtrx, prefix=prefix_pred_vds, limit=limit)
         gen.predict()
 
     save_config(database_dir=path_to_database, batch_size=batch_size, epoch=epoch,
                 shape=list(dim), augmentation=augmentation,
                 lr=list(lr), class_weights=class_weights, filename=path_to_conf_yaml)
     _conversion.save_h5_pb(path_pb, model=model, **kwargs)
-    get_md5(path_to_maindir)
+    if not git_lfs:
+        get_md5(path_to_maindir)

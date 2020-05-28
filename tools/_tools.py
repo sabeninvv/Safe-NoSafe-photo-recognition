@@ -18,7 +18,7 @@ from tqdm import tqdm
 from operator import itemgetter
 
 
-def crop2img2arr(path_to_img, dim=(128, 128, 3), resize=True, normalize=True, interpolation=cv2.INTER_CUBIC):
+def crop2img2arr(path_to_img, dim=None, normalize=True, interpolation=cv2.INTER_CUBIC):
     '''
     IMG -> RGB -> numpy.array(dtype=numpy.float32)
     :param path_to_img: string
@@ -28,7 +28,6 @@ def crop2img2arr(path_to_img, dim=(128, 128, 3), resize=True, normalize=True, in
     :param interpolation: cv2.INTER_CUBIC, cv.INTER_NEAREST, cv.INTER_LINEAR, cv.INTER_AREA, cv.INTER_LANCZOS4
     :return: numpy.array(dtype=numpy.float32)
     '''
-    h, w, _ = dim
     try:
         img = cv2.imread(path_to_img)
         assert np.any(img), f'Ошибка открытия {path_to_img}'
@@ -46,13 +45,22 @@ def crop2img2arr(path_to_img, dim=(128, 128, 3), resize=True, normalize=True, in
                 return None
     if img.shape[-1] == 4:
         img = img[:, :, :-1]
-    if resize:
+    if np.any(dim):
+        h, w, _ = dim
         img = cv2.resize(img, (h, w), interpolation=interpolation)
     if normalize:
         img = img.astype(np.float32)
         img /= 128.
         img -= 1.
     return img
+
+
+def rotate_img(imgarr, angle, interpolation):
+    image_center = tuple(np.array(imgarr.shape[:2]) / 2)
+    rot_mat = cv2.getRotationMatrix2D(image_center, angle, 1.0)
+    result = cv2.warpAffine(imgarr, rot_mat, imgarr.shape[1::-1], flags=interpolation,
+                            borderMode=cv2.BORDER_REFLECT_101, borderValue=(0, 0, 0,))
+    return result
 
 
 def getConfMatrix(model, X_test, y_true, to_categorical=False, y_pred=None):
@@ -65,11 +73,16 @@ def getConfMatrix(model, X_test, y_true, to_categorical=False, y_pred=None):
     :param to_categorical: bool. если labels в one hot encoding
     '''
     if to_categorical:
-        num_pics_test = np.unique(y_true, return_counts=True, axis=-2)[1]
+        uniq_nums, uniq_counts = np.unique(y_true, return_counts=True, axis=-2)
+        temp = np.array([], np.uint8)
+        for i in uniq_nums:
+            temp = np.append(temp, i.argmax())
+        uniq_nums = temp.copy()
     else:
-        num_pics_test = np.unique(y_true, return_counts=True)[1]
+        uniq_nums, uniq_counts = np.unique(y_true, return_counts=True)
     if isinstance(y_pred, (np.ndarray, list)) and len(y_pred) > 0:
-        assert y_pred.shape == y_true.shape, ('Не совпадают размеры массивов для построения квадратной матрицы ошибок. Проследите, чтобы выполнялось условие y_pred.shape == y_true.shape ')
+        assert y_pred.shape == y_true.shape, (
+            'Не совпадают размеры массивов для построения квадратной матрицы ошибок. Проследите, чтобы выполнялось условие y_pred.shape == y_true.shape ')
         data = {'y_Actual': y_true,
                 'y_Predicted': y_pred
                 }
@@ -82,10 +95,10 @@ def getConfMatrix(model, X_test, y_true, to_categorical=False, y_pred=None):
                                    df['y_Predicted'],
                                    rownames=['Actual'],
                                    colnames=['Predicted'],
-                                   margins=True)
-    for row, countInClass in enumerate(num_pics_test):
-        confusion_matrix.loc[row] = (confusion_matrix.loc[row] * 100) / countInClass
-        confusion_matrix.loc[row] = np.around(confusion_matrix.loc[row], 2)
+                                   margins=False)
+    for label, countInClass in zip(uniq_nums, uniq_counts):
+        confusion_matrix.loc[label] = (confusion_matrix.loc[label] * 100) / countInClass
+        confusion_matrix.loc[label] = np.around(confusion_matrix.loc[label], 2)
     return confusion_matrix
 
 
@@ -339,9 +352,9 @@ def gen_to_pred(model, path, x, y, batch=1000):
     :param y: string. Ключ в .h5py к y_train
     :param batch: integer. Размер батча
     '''
-    inx = 0 # Индекс для контроля перемещения по .hdf5
-    y_pred_all = [] # Список с распознанными метками классов
-    y_true_all = [] # Список с истинными метками классов
+    inx = 0  # Индекс для контроля перемещения по .hdf5
+    y_pred_all = []  # Список с распознанными метками классов
+    y_true_all = []  # Список с истинными метками классов
     if batch == 0:
         batch = 1
     while True:
@@ -394,6 +407,7 @@ def getConfUseGen(model, path, x, y, batch=1000):
                              to_categorical=False,
                              y_pred=y_pred)
     return confMtrx
+
 
 def lr_scheduler(epoch):
     '''
@@ -452,20 +466,24 @@ def one_epoch_confmtrx(**kwargs):
     :param epoch: integer. номер эпохи
     :param logs: dict. логи входной эпохи
     '''
-    mtrx = getConfMatrix(kwargs['model'], kwargs['X_test'], kwargs['y_test'])
+    mtrx = getConfMatrix(model=kwargs['model'], X_test=kwargs['X_test'], y_true=kwargs['y_test'])
     print(mtrx)
     if len(kwargs) > 5:
-        conf_values = {i: mtrx.values[i][i] for i in range(mtrx.values.shape[-1]-1)}
-
-        acc = kwargs['logs'].get('acc') * 100
-        acc = np.around(acc, 2)
-        val_acc = kwargs['logs'].get('val_acc') * 100
-        val_acc = np.around(val_acc, 2)
-        merge_acc = f'{acc}/{val_acc}'
-
-        inf = {'value1': kwargs['epoch']+1, 'value2': merge_acc, 'value3': conf_values}
-        ifttt_url = f'https://maker.ifttt.com/trigger/{kwargs["NAME_APP"]}/with/key/{kwargs["API_KEY"]}'
-        requests.post(ifttt_url, json = inf)
+        try:
+            conf_values = {i: mtrx.values[i][i] for i in range(mtrx.values.shape[-1] - 1)}
+            acc = kwargs['logs'].get('acc') * 100
+            acc = np.around(acc, 2)
+            val_acc = kwargs['logs'].get('val_acc') * 100
+            val_acc = np.around(val_acc, 2)
+            merge_acc = f'{acc}/{val_acc}'
+        except:
+            pass
+        try:
+            inf = {'value1': kwargs['epoch'] + 1, 'value2': merge_acc, 'value3': conf_values}
+            ifttt_url = f'https://maker.ifttt.com/trigger/{kwargs["NAME_APP"]}/with/key/{kwargs["API_KEY"]}'
+            requests.post(ifttt_url, json=inf, timeout=1.8)
+        except:
+            pass
 
 
 def createImgLinks(main_dir, need_global_path=True):
@@ -564,11 +582,12 @@ def createZerosTVT(train_db, valid_db, test_db, dim=(128, 128, 3)):
     return X_train, X_val, X_test, y_train, y_val, y_test
 
 
-def fillZeros(X, y, dim, link_db, path, label, interpolation=cv2.INTER_CUBIC):
+def fillZeros(X, y, link_db, inx_class, inx_path, dim=None, interpolation=cv2.INTER_CUBIC):
     '''
     Наполнение пустых train, valid, test массивов данных
-    :param path: int.
-    :param dim: int.
+    :param inx_class: int. Номер столбца class_img в link_db
+    :param inx_path: int. Номер столбца path_to_img в link_db
+    :param dim: tuple. Размернось изображения при resize
     :param X: numpy.array(dtype=numpy.uint8). пустой массив данных под образцы
     :param y: numpy.array(dtype=numpy.uint8). пустой массив данных под метки
     :param link_db: pandas.DataFrame. pandas dataframe c ссылками
@@ -578,16 +597,16 @@ def fillZeros(X, y, dim, link_db, path, label, interpolation=cv2.INTER_CUBIC):
     h, w, c = dim
     for row in tqdm(link_db.values):
         try:
-            imgarr = cv2.imread(row[path])
-            assert np.any(imgarr), f'Ошибка открытия {row[path]}'
+            imgarr = cv2.imread(row[inx_path])
+            assert np.any(imgarr), f'Ошибка открытия {row[inx_path]}'
             imgarr = cv2.cvtColor(imgarr, cv2.COLOR_BGR2RGB)
         except AssertionError:
             try:
-                imgarr = io.imread(row[path])
+                imgarr = io.imread(row[inx_path])
                 assert imgarr.shape[-1] in [1, 2, 3, 4], ('Невозможно конвертировать в RGB')
             except:
                 try:
-                    img = Image.open(row[path])
+                    img = Image.open(row[inx_path])
                     img = img.convert('RGB')
                     imgarr = np.array(img, np.uint8)
                 except:
@@ -595,14 +614,15 @@ def fillZeros(X, y, dim, link_db, path, label, interpolation=cv2.INTER_CUBIC):
         if np.any(imgarr):
             if imgarr.shape[-1] == 4:
                 imgarr = imgarr[:, :, :-1]
-            imgarr = cv2.resize(imgarr, (h, w), interpolation=interpolation)
+            if np.any(dim):
+                imgarr = cv2.resize(imgarr, (h, w), interpolation=interpolation)
             X[index] = imgarr
-            y[index] = row[label]
+            y[index] = row[inx_class]
             index += 1
     return X[:index], y[:index]
 
 
-def show_prediction(img_path, model, all_classes=True, level=0.1):
+def show_prediction(img_path, model, dim=None, all_classes=True, level=0.1):
     '''
     :param img_path: string. путь к изображению
     :param model: Keras model. модель нейронной сети
@@ -610,7 +630,7 @@ def show_prediction(img_path, model, all_classes=True, level=0.1):
     :param level: float. уровень значимости для отображения вероятностей классов
     '''
 
-    probability = model.predict(np.expand_dims(crop2img2arr(img_path), axis=0))
+    probability = model.predict(np.expand_dims(crop2img2arr(img_path, dim=dim), axis=0))
     probability = np.round(probability[0] * 100, 1)
     labels = {0: 'Nudity', 1: 'Neutral', 2: 'Suggestive', 3: 'Body art', 4: 'Implicit erection', 5: 'Transparent'}
     class_names = list(labels.values())
