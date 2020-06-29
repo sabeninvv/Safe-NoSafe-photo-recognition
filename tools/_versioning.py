@@ -107,7 +107,7 @@ def easy_finish(path_to_database, dim, model, epoch, lr,
         gen.predict()
     if path_to_test_vds:
         gen = _analytics.Pred2vds(path_to_dir=path_to_test_vds, dim=dim, batch=batch_predict,
-                                  model=model, only_key_frames=False, frames_count=frames_count,
+                                  model=model, frames_count=frames_count,
                                   filename=path_to_confmtrx, prefix=prefix_pred_vds, limit=limit)
         gen.predict()
 

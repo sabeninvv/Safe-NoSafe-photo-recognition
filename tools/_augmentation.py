@@ -13,14 +13,15 @@ from time import time
 
 
 class ImgResizeSave():
-    def __init__(self, dir_to_open, new_dir_to_save, dim=None, cut=True,
-                 interpolation=cv2.INTER_CUBIC, number_of_multiproces=0):
+    def __init__(self, dir_to_open, new_dir_to_save, dim=None, cut=False,
+                 interpolation=cv2.INTER_CUBIC, crop_length=None, number_of_multiproces=0):
         self.dim = dim
         self.interpolation = interpolation
         self.number_of_multiproces = number_of_multiproces
         self.dir_to_open = dir_to_open
         self.new_dir_to_save = new_dir_to_save
         self.cut = cut
+        self.crop_length = crop_length
 
 
     def rotate_img(self, imgarr, angle):
@@ -49,10 +50,24 @@ class ImgResizeSave():
                     img = None
         return img, flagBGR
 
+    def resize_img(self, img):
+        # initialize the dimensions of the image to be resized and
+        (h, w) = img.shape[:2]
+        if self.crop_length > h or self.crop_length > w:
+            return img
+        max_length = h if h > w else w
+        # calculate the ratio of the height and construct the dimensions
+        ratio = self.crop_length / float(max_length)
+        dim = (int(w * ratio), self.crop_length) if h > w else (self.crop_length, int(h * ratio))
+        resized_img = cv2.resize(img, dim, interpolation=self.interpolation)
+        return resized_img
+
     def save_img(self, img, rand_name, path_to_save, inx=""):
         if self.dim:
             w_resize, h_resize, _ = self.dim
             img = cv2.resize(img, (w_resize, h_resize), interpolation=self.interpolation)
+        if self.crop_length:
+            img = self.resize_img(img)
         name = rand_name + f'{inx}.jpg'
         path_to_new_img = os.path.join(path_to_save, name)
         cv2.imwrite(path_to_new_img, img, [cv2.IMWRITE_JPEG_QUALITY, 100])
@@ -90,8 +105,20 @@ class ImgResizeSave():
             args = []
             args.append(str(self.dir_to_open))
             args.append(str(self.new_dir_to_save))
-            args.append(f'{self.dim[0]},{self.dim[1]},{self.dim[2]}')
+            if self.dim:
+                args.append(f'{self.dim[0]},{self.dim[1]},{self.dim[2]}')
+            else:
+                args.append('')
+            if self.crop_length:
+                args.append(str(self.crop_length))
+            else:
+                args.append('')
+            if self.cut:
+                args.append(str(self.cut))
+            else:
+                args.append('')
             args.append(str(self.number_of_multiproces))
+            print(args)
             with Popen([sys.executable, str(__file__), *args]) as process:
                 _ = process.communicate()
         else:
@@ -123,11 +150,13 @@ class new_class(ImgResizeSave):
 
 def main(*args):
     if args:
-        dir_to_open, new_dir_to_save, dim, number_of_multiproces = args[0]
-        dim = tuple(np.array(dim.split(','), dtype=np.uint8))
+        dir_to_open, new_dir_to_save, dim, crop_length, cut, number_of_multiproces = args[0]
+        dim = tuple(np.array(dim.split(','), dtype=np.uint8)) if dim else None
+        crop_length = int(crop_length) if crop_length else None
+        cut = bool(cut) if cut else None
         number_of_multiproces = int(number_of_multiproces)
-        class_obj = new_class(dir_to_open=dir_to_open, new_dir_to_save=new_dir_to_save,
-                              dim=dim, number_of_multiproces=number_of_multiproces)
+        class_obj = new_class(dir_to_open=dir_to_open, new_dir_to_save=new_dir_to_save, cut=cut,
+                              dim=dim, crop_length=crop_length, number_of_multiproces=number_of_multiproces)
         class_obj.imgs_copy()
 
 

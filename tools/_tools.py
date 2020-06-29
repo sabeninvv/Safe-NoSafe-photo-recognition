@@ -5,7 +5,6 @@ from __future__ import print_function
 import os
 import sys
 import time
-import requests
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,9 +12,24 @@ import pandas as pd
 from PIL import Image
 import cv2
 from skimage import io
+from tensorflow.keras.callbacks import Callback
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 from operator import itemgetter
+
+
+class callback_print_confmtrx(Callback):
+    def __init__(self, X, y):
+        super(callback_print_confmtrx, self).__init__()
+        self.X = X
+        self.y = y
+    def on_epoch_end(self, epoch, logs=None):
+        matrix = getConfMatrix(model=self.model, X_test=self.X, y_true=self.y)
+        print(matrix)
+        # try:
+        #     inf = {'value1': kwargs['epoch'] + 1, 'value2': merge_acc, 'value3': conf_values}
+        #     ifttt_url = f'https://maker.ifttt.com/trigger/{kwargs["NAME_APP"]}/with/key/{kwargs["API_KEY"]}'
+        #     requests.post(ifttt_url, json=inf, timeout=1.8)
 
 
 def crop2img2arr(path_to_img, dim=None, normalize=True, interpolation=cv2.INTER_CUBIC):
@@ -47,7 +61,7 @@ def crop2img2arr(path_to_img, dim=None, normalize=True, interpolation=cv2.INTER_
         img = img[:, :, :-1]
     if np.any(dim):
         h, w, _ = dim
-        img = cv2.resize(img, (h, w), interpolation=interpolation)
+        img = cv2.resize(img, (w, h), interpolation=interpolation)
     if normalize:
         img = img.astype(np.float32)
         img /= 128.
@@ -63,7 +77,7 @@ def rotate_img(imgarr, angle, interpolation):
     return result
 
 
-def getConfMatrix(model, X_test, y_true, to_categorical=False, y_pred=None):
+def getConfMatrix(model, X_test, y_true, y_pred=None):
     '''
     Создание матрицы ошибок (в %)
     :param model: tensorflow.python.keras.engine.training.Model. обученная tf.keras модель
@@ -72,17 +86,21 @@ def getConfMatrix(model, X_test, y_true, to_categorical=False, y_pred=None):
     :param y_pred: numpy.array(dtype=numpy.uint8) or list. predict labels
     :param to_categorical: bool. если labels в one hot encoding
     '''
-    if to_categorical:
+    if len(y_true.shape) != 1:
         uniq_nums, uniq_counts = np.unique(y_true, return_counts=True, axis=-2)
         temp = np.array([], np.uint8)
         for i in uniq_nums:
             temp = np.append(temp, i.argmax())
         uniq_nums = temp.copy()
+        temp = np.array([], np.uint8)
+        for row in y_true:
+            temp = np.append(temp, row.argmax())
+        y_true = temp.copy()
     else:
         uniq_nums, uniq_counts = np.unique(y_true, return_counts=True)
     if isinstance(y_pred, (np.ndarray, list)) and len(y_pred) > 0:
         assert y_pred.shape == y_true.shape, (
-            'Не совпадают размеры массивов для построения квадратной матрицы ошибок. Проследите, чтобы выполнялось условие y_pred.shape == y_true.shape ')
+            'Не совпадают размеры массивов для построения квадратной матрицы ошибок. Условие: y_pred.shape == y_true.shape ')
         data = {'y_Actual': y_true,
                 'y_Predicted': y_pred
                 }
@@ -455,35 +473,6 @@ def simple_lr_scheduler(epoch):
     else:
         lr = 1e-4
         return lr
-
-
-def one_epoch_confmtrx(**kwargs):
-    '''
-    X_test, y_test должны быть нормализованны.
-    NAME_APP, API_KEY.
-    Создаёт матрицу ошибок X_test, y_test.
-    Передаёт POST запрос на сервер IFTTT.
-    :param epoch: integer. номер эпохи
-    :param logs: dict. логи входной эпохи
-    '''
-    mtrx = getConfMatrix(model=kwargs['model'], X_test=kwargs['X_test'], y_true=kwargs['y_test'])
-    print(mtrx)
-    if len(kwargs) > 5:
-        try:
-            conf_values = {i: mtrx.values[i][i] for i in range(mtrx.values.shape[-1] - 1)}
-            acc = kwargs['logs'].get('acc') * 100
-            acc = np.around(acc, 2)
-            val_acc = kwargs['logs'].get('val_acc') * 100
-            val_acc = np.around(val_acc, 2)
-            merge_acc = f'{acc}/{val_acc}'
-        except:
-            pass
-        try:
-            inf = {'value1': kwargs['epoch'] + 1, 'value2': merge_acc, 'value3': conf_values}
-            ifttt_url = f'https://maker.ifttt.com/trigger/{kwargs["NAME_APP"]}/with/key/{kwargs["API_KEY"]}'
-            requests.post(ifttt_url, json=inf, timeout=1.8)
-        except:
-            pass
 
 
 def createImgLinks(main_dir, need_global_path=True):

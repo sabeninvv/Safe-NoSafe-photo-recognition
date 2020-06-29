@@ -21,6 +21,7 @@ def get_denominator(stream_frames, frames_count, fps):
     denominator = np.ceil(fps / arg)
     return denominator + .3
 
+
 def blur_detection(arr):
     '''
     Blur detection with Laplacian operator.
@@ -60,8 +61,8 @@ def frame_to_arr(frame, dim, normalize, interpolation, reshape, rotate):
     '''
     img = frame.reformat(format="yuv420p").reformat(format="rgb24").to_ndarray()
     if np.any(dim):
-        h, w, _ = dim
-        img = cv2.resize(img, (h, w), interpolation=interpolation)
+        (h, w) = dim[:2]
+        img = cv2.resize(img, (w, h), interpolation=interpolation)
     if normalize:
         img = img.astype(np.float32)
         img /= 128.
@@ -69,8 +70,16 @@ def frame_to_arr(frame, dim, normalize, interpolation, reshape, rotate):
     if rotate:
         img = rotate_img(imgarr=img, angle=rotate, interpolation=interpolation)
     if reshape:
-        img = img.reshape((1, *dim))
+        img = np.expand_dims(img, axis=0)
     return img
+
+
+def get_stream_frames(path):
+    with av.open(path) as container:
+        stream = container.streams.video[0]
+        stream_frames = [1 for _ in container.decode(stream)]
+        stream_frames = len(stream_frames)
+        return stream_frames
 
 
 def get_inxs(path, dim, frames_count, denominator, interpolation=cv2.INTER_AREA):
@@ -87,8 +96,9 @@ def get_inxs(path, dim, frames_count, denominator, interpolation=cv2.INTER_AREA)
     with av.open(path) as container:
         stream = container.streams.video[0]
         fps = np.ceil(stream.base_rate.numerator / stream.base_rate.denominator)
+        stream_frames = stream.frames if stream.frames != 0 else get_stream_frames(path=path)
         if not denominator:
-            denominator = get_denominator(stream_frames=stream.frames, frames_count=frames_count, fps=fps)
+            denominator = get_denominator(stream_frames=stream_frames, frames_count=frames_count, fps=fps)
         laplacians = np.zeros(0, np.float16)
         for frame in container.decode(stream):
             arr = frame_to_arr(frame=frame, dim=dim, normalize=False, interpolation=interpolation, reshape=False,
@@ -106,6 +116,7 @@ def get_inxs(path, dim, frames_count, denominator, interpolation=cv2.INTER_AREA)
             if inxs.size == frames_count:
                 break
         return inxs
+
 
 def video_to_arrays(path, frames_count, dim=None, denominator=None, interpolation=cv2.INTER_CUBIC, normalize=True,
                     rotate=False):
@@ -137,7 +148,8 @@ def video_to_arrays(path, frames_count, dim=None, denominator=None, interpolatio
             if isinstance(packet.stream, av.video.stream.VideoStream):
                 for frame in packet.decode():
                     if frame.index in inxs:
-                        arr = frame_to_arr(frame=frame, dim=dim, normalize=normalize, interpolation=interpolation, reshape=True,
+                        arr = frame_to_arr(frame=frame, dim=dim, normalize=normalize, interpolation=interpolation,
+                                           reshape=True,
                                            rotate=angle)
                         arrs = np.concatenate((arrs, arr), axis=0)
                     if arrs.shape[0] == frames_count:
