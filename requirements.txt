@@ -36,7 +36,7 @@ googleapis-common-protos==1.51.0
 GPUtil==1.4.0
 grpcio==1.26.0
 h5py==2.10.0
-httplib2==0.17.0
+httplib2==0.19.0
 humanize==2.4.0
 idna==2.6
 imageio==2.8.0
